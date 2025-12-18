@@ -1,0 +1,8 @@
+{
+  "name": "FASTgo Delivery Ecosystem",
+  "description": "A live-connected multi-role food delivery platform using Supabase Realtime and Gemini AI.",
+  "requestFramePermissions": [
+    "geolocation",
+    "camera"
+  ]
+}
