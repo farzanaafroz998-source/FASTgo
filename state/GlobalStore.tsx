@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Order, OrderStatus } from '../types';
 import { supabase } from '../services/supabaseClient';
@@ -19,7 +20,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [notifications, setNotifications] = useState<string[]>([]);
 
-  // Robust mapper to ensure Frontend types match DB schema
+  // Robust mapper to translate DB snake_case fields to Frontend camelCase types
   const mapOrder = (db: any): Order => ({
     id: db.id,
     customerId: db.customer_id,
@@ -38,19 +39,22 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   useEffect(() => {
     if (!supabase) return;
 
-    const fetchOrders = async () => {
+    // Fetch initial state
+    const fetchInitialData = async () => {
       const { data, error } = await supabase
         .from('orders')
         .select('*')
         .order('created_at', { ascending: false });
       
-      if (!error && data) setOrders(data.map(mapOrder));
+      if (!error && data) {
+        setOrders(data.map(mapOrder));
+      }
     };
 
-    fetchOrders();
+    fetchInitialData();
 
-    // Listen for Order changes
-    const orderChannel = supabase.channel('order-updates')
+    // Setup Realtime Channels
+    const orderChannel = supabase.channel('fastgo-orders')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newOrder = mapOrder(payload.new);
@@ -59,15 +63,19 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } else if (payload.eventType === 'UPDATE') {
           const updated = mapOrder(payload.new);
           setOrders(prev => prev.map(o => o.id === updated.id ? updated : o));
-          setNotifications(prev => [`Order updated: ${updated.status}`, ...prev].slice(0, 10));
+          setNotifications(prev => [`Status: Order ${updated.id.slice(0,4)} is ${updated.status}`, ...prev].slice(0, 10));
         }
       })
       .subscribe();
 
-    // Listen for Rider Location changes
-    const locationChannel = supabase.channel('rider-tracking')
+    const locationChannel = supabase.channel('fastgo-tracking')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rider_locations' }, (payload) => {
-        setRiderLocation({ lat: parseFloat(payload.new.lat), lng: parseFloat(payload.new.lng) });
+        if (payload.new && payload.new.lat && payload.new.lng) {
+          setRiderLocation({ 
+            lat: parseFloat(payload.new.lat), 
+            lng: parseFloat(payload.new.lng) 
+          });
+        }
       })
       .subscribe();
 
@@ -114,12 +122,14 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   };
 
   const updateRiderLocation = async (lat: number, lng: number) => {
+    // Optimistic update
     setRiderLocation({ lat, lng });
+    
     if (!supabase) return;
 
-    // Use a hardcoded or session-based rider ID
+    // Persist to DB for others to track
     await supabase.from('rider_locations').upsert({ 
-      rider_id: 'RIDER-01', 
+      rider_id: 'RIDER-01', // Mock rider ID
       lat, 
       lng, 
       updated_at: new Date() 
@@ -138,6 +148,6 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
 export const useGlobalState = () => {
   const context = useContext(GlobalContext);
-  if (!context) throw new Error('useGlobalState error');
+  if (!context) throw new Error('useGlobalState must be used within GlobalProvider');
   return context;
 };
