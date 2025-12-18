@@ -6,6 +6,7 @@ interface GlobalState {
   orders: Order[];
   placeOrder: (order: any) => Promise<void>;
   updateOrderStatus: (orderId: string, status: OrderStatus) => Promise<void>;
+  assignRider: (orderId: string, riderId: string) => Promise<void>;
   riderLocation: { lat: number; lng: number } | null;
   updateRiderLocation: (lat: number, lng: number) => Promise<void>;
   notifications: string[];
@@ -42,10 +43,10 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           setOrders(prev => [payload.new as Order, ...prev]);
-          setNotifications(prev => [`New Order received!`, ...prev].slice(0, 5));
+          setNotifications(prev => [`New Order received!`, ...prev].slice(0, 10));
         } else if (payload.eventType === 'UPDATE') {
           setOrders(prev => prev.map(o => o.id === payload.new.id ? (payload.new as Order) : o));
-          setNotifications(prev => [`Order status updated to ${payload.new.status}`, ...prev].slice(0, 5));
+          setNotifications(prev => [`Order status updated to ${payload.new.status}`, ...prev].slice(0, 10));
         }
       })
       .subscribe();
@@ -68,7 +69,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       // Mock Mode
       const mockOrder = { ...order, id: `MOCK-${Date.now()}` };
       setOrders(prev => [mockOrder, ...prev]);
-      setNotifications(prev => ["Order placed (Mock Mode)", ...prev]);
+      setNotifications(prev => ["Order placed (Mock Mode)", ...prev].slice(0, 10));
       return;
     }
     await supabase.from('orders').insert([order]);
@@ -78,10 +79,20 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if (!supabase) {
       // Mock Mode
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
-      setNotifications(prev => [`Status updated to ${status} (Mock Mode)`, ...prev]);
+      setNotifications(prev => [`Status updated to ${status} (Mock Mode)`, ...prev].slice(0, 10));
       return;
     }
     await supabase.from('orders').update({ status }).eq('id', orderId);
+  };
+
+  const assignRider = async (orderId: string, riderId: string) => {
+    if (!supabase) {
+      // Mock Mode
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, riderId, status: OrderStatus.PREPARING } : o));
+      setNotifications(prev => [`Rider ${riderId} assigned to order (Mock Mode)`, ...prev].slice(0, 10));
+      return;
+    }
+    await supabase.from('orders').update({ rider_id: riderId, status: OrderStatus.PREPARING }).eq('id', orderId);
   };
 
   const updateRiderLocation = async (lat: number, lng: number) => {
@@ -89,6 +100,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     if (!supabase) return;
 
+    // Optional: Only update if user is authenticated and is a rider
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from('rider_locations').upsert({ 
@@ -102,7 +114,7 @@ export const GlobalProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   return (
     <GlobalContext.Provider value={{ 
-      orders, placeOrder, updateOrderStatus, 
+      orders, placeOrder, updateOrderStatus, assignRider,
       riderLocation, updateRiderLocation,
       notifications
     }}>

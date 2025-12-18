@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import DashboardAdmin from './components/DashboardAdmin';
 import DashboardCustomer from './components/DashboardCustomer';
@@ -11,7 +10,23 @@ import { GlobalProvider } from './state/GlobalStore';
 const App: React.FC = () => {
   const [role, setRole] = useState<UserRole | null>(null);
 
-  const handleLogout = () => setRole(null);
+  useEffect(() => {
+    // Subdomain detection logic
+    const hostname = window.location.hostname;
+    if (hostname.includes('admin.')) setRole(UserRole.ADMIN);
+    else if (hostname.includes('rider.')) setRole(UserRole.RIDER);
+    else if (hostname.includes('store.')) setRole(UserRole.STORE);
+    else if (hostname.includes('customer.')) setRole(UserRole.CUSTOMER);
+  }, []);
+
+  const handleLogout = () => {
+    // Clear subdomain state or redirect to main landing
+    setRole(null);
+    if (window.location.hostname !== 'fastgo.com' && !window.location.hostname.includes('localhost')) {
+      // In a real production app, you might redirect to the main domain here
+      // window.location.href = 'https://fastgo.com';
+    }
+  };
 
   return (
     <GlobalProvider>
@@ -20,15 +35,15 @@ const App: React.FC = () => {
           <LandingPage onLogin={setRole} />
         ) : (
           <>
-            <nav className="sticky top-0 z-50 bg-white border-b px-6 py-4 flex items-center justify-between">
+            <nav className="sticky top-0 z-50 bg-white border-b px-6 py-4 flex items-center justify-between shadow-sm">
               <div 
                 className="flex items-center gap-2 cursor-pointer" 
                 onClick={() => setRole(null)}
               >
                 <div className="w-8 h-8 bg-[#FF5F00] rounded-lg flex items-center justify-center text-white font-bold text-lg">F</div>
                 <span className="text-xl font-extrabold text-gray-900 hidden sm:block">FASTgo</span>
-                <span className="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ml-1">
-                  {role.replace('_', ' ')}
+                <span className="bg-orange-50 text-[#FF5F00] px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest ml-1 border border-orange-100">
+                  {role.replace('_', ' ')} Portal
                 </span>
               </div>
               
@@ -58,7 +73,7 @@ const App: React.FC = () => {
             </main>
 
             <footer className="mt-20 py-10 px-6 border-t bg-white text-center">
-              <p className="text-gray-400 text-sm font-medium">© 2024 FASTgo Delivery Ecosystem. Built with Gemini AI.</p>
+              <p className="text-gray-400 text-sm font-medium">© 2024 FASTgo Delivery Ecosystem. All Systems Operational.</p>
             </footer>
           </>
         )}
